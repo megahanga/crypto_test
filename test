@@ -1,0 +1,277 @@
+import base64
+import hashlib
+from Crypto import Random
+from Crypto.Cipher import AES
+
+class AESCipher(object):
+
+    def __init__(self, key):
+        self.bs = AES.block_size
+        self.key = hashlib.sha256(key.encode()).digest()
+
+    def encrypt(self, raw):
+        raw = self._pad(raw)
+        iv = Random.new().read(AES.block_size)
+        cipher = AES.new(self.key, AES.MODE_CBC, iv)
+        return base64.b64encode(iv + cipher.encrypt(raw.encode()))
+
+    def decrypt(self, enc):
+        enc = base64.b64decode(enc)
+        iv = enc[:AES.block_size]
+        cipher = AES.new(self.key, AES.MODE_CBC, iv)
+        return self._unpad(cipher.decrypt(enc[AES.block_size:])).decode('utf-8')
+
+    def _pad(self, s):
+        return s + (self.bs - len(s) % self.bs) * chr(self.bs - len(s) % self.bs)
+
+    @staticmethod
+    def _unpad(s):
+        return s[:-ord(s[len(s)-1:])]
+        
+        
+#----
+BS = 16
+pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
+unpad = lambda s : s[:-ord(s[len(s)-1:])]
+
+import base64
+from Crypto.Cipher import AES
+from Crypto import Random
+
+class AESCipher:
+    def __init__( self, key ):
+        self.key = key
+
+    def encrypt( self, raw ):
+        raw = pad(raw)
+        iv = Random.new().read( AES.block_size )
+        cipher = AES.new( self.key, AES.MODE_CBC, iv )
+        return base64.b64encode( iv + cipher.encrypt( raw ) )
+
+    def decrypt( self, enc ):
+        enc = base64.b64decode(enc)
+        iv = enc[:16]
+        cipher = AES.new(self.key, AES.MODE_CBC, iv )
+        return unpad(cipher.decrypt( enc[16:] ))
+ 
+ #----
+ 
+ from Crypto.Cipher import AES
+from Crypto.Util import Counter
+from Crypto import Random
+
+# AES supports multiple key sizes: 16 (AES128), 24 (AES192), or 32 (AES256).
+key_bytes = 32
+
+# Takes as input a 32-byte key and an arbitrary-length plaintext and returns a
+# pair (iv, ciphtertext). "iv" stands for initialization vector.
+def encrypt(key, plaintext):
+    assert len(key) == key_bytes
+
+    # Choose a random, 16-byte IV.
+    iv = Random.new().read(AES.block_size)
+
+    # Convert the IV to a Python integer.
+    iv_int = int(binascii.hexlify(iv), 16)
+
+    # Create a new Counter object with IV = iv_int.
+    ctr = Counter.new(AES.block_size * 8, initial_value=iv_int)
+
+    # Create AES-CTR cipher.
+    aes = AES.new(key, AES.MODE_CTR, counter=ctr)
+
+    # Encrypt and return IV and ciphertext.
+    ciphertext = aes.encrypt(plaintext)
+    return (iv, ciphertext)
+
+# Takes as input a 32-byte key, a 16-byte IV, and a ciphertext, and outputs the
+# corresponding plaintext.
+def decrypt(key, iv, ciphertext):
+    assert len(key) == key_bytes
+
+    # Initialize counter for decryption. iv should be the same as the output of
+    # encrypt().
+    iv_int = int(iv.encode('hex'), 16)
+    ctr = Counter.new(AES.block_size * 8, initial_value=iv_int)
+
+    # Create AES-CTR cipher.
+    aes = AES.new(key, AES.MODE_CTR, counter=ctr)
+
+    # Decrypt and return the plaintext.
+    plaintext = aes.decrypt(ciphertext)
+    return plaintext
+
+(iv, ciphertext) = encrypt(key, 'hella')
+print decrypt(key, iv, ciphertext)
+
+
+
+# Nominal way to generate a fresh key. This calls the system's random number
+# generator (RNG).
+key1 = Random.new().read(key_bytes)
+
+
+
+ It's also possible to derive a key from a password, but it's important that
+# the password have high entropy, meaning difficult to predict.
+password = "This is a rather weak password."
+
+# For added # security, we add a "salt", which increases the entropy.
+#
+# In this example, we use the same RNG to produce the salt that we used to
+# produce key1.
+salt_bytes = 8
+salt = Random.new().read(salt_bytes)
+
+# Stands for "Password-based key derivation function 2"
+key2 = PBKDF2(password, salt, key_bytes)
+
+
+
+#----
+
+import base64
+import hashlib
+from Cryptodome.Cipher import AES
+from Cryptodome.Random import get_random_bytes
+
+__key__ = hashlib.sha256(b'16-character key').digest()
+
+def encrypt(raw):
+    BS = AES.block_size
+    pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
+
+    raw = base64.b64encode(pad(raw).encode('utf8'))
+    iv = get_random_bytes(AES.block_size)
+    cipher = AES.new(key= __key__, mode= AES.MODE_CFB,iv= iv)
+    return base64.b64encode(iv + cipher.encrypt(raw))
+
+def decrypt(enc):
+    unpad = lambda s: s[:-ord(s[-1:])]
+
+    enc = base64.b64decode(enc)
+    iv = enc[:AES.block_size]
+    cipher = AES.new(__key__, AES.MODE_CFB, iv)
+    return unpad(base64.b64decode(cipher.decrypt(enc[AES.block_size:])).decode('utf8'))
+    
+    
+----
+
+import base64
+import urllib2
+from Crypto.Cipher import AES
+
+
+def decrypt(quotedEncodedEncrypted):
+    key = 'SecretKey'
+
+    encodedEncrypted = urllib2.unquote(quotedEncodedEncrypted)
+
+    cipher = AES.new(key)
+    decrypted = cipher.decrypt(base64.b64decode(encodedEncrypted))[:16]
+
+    for i in range(1, len(base64.b64decode(encodedEncrypted))/16):
+        cipher = AES.new(key, AES.MODE_CBC, base64.b64decode(encodedEncrypted)[(i-1)*16:i*16])
+        decrypted += cipher.decrypt(base64.b64decode(encodedEncrypted)[i*16:])[:16]
+
+    return decrypted.strip()
+    
+----
+
+import base64
+import hashlib
+from Cryptodome.Cipher import AES as domeAES
+from Cryptodome.Random import get_random_bytes
+from Crypto import Random
+from Crypto.Cipher import AES as cryptoAES
+
+BLOCK_SIZE = AES.block_size
+
+key = "my_secret_key".encode()
+__key__ = hashlib.sha256(key).digest()
+print(__key__)
+
+def encrypt(raw):
+    BS = cryptoAES.block_size
+    pad = lambda s: s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
+    raw = base64.b64encode(pad(raw).encode('utf8'))
+    iv = get_random_bytes(cryptoAES.block_size)
+    cipher = cryptoAES.new(key= __key__, mode= cryptoAES.MODE_CFB,iv= iv)
+    a= base64.b64encode(iv + cipher.encrypt(raw))
+    IV = Random.new().read(BLOCK_SIZE)
+    aes = domeAES.new(__key__, domeAES.MODE_CFB, IV)
+    b = base64.b64encode(IV + aes.encrypt(a))
+    return b
+
+def decrypt(enc):
+    passphrase = __key__
+    encrypted = base64.b64decode(enc)
+    IV = encrypted[:BLOCK_SIZE]
+    aes = domeAES.new(passphrase, domeAES.MODE_CFB, IV)
+    enc = aes.decrypt(encrypted[BLOCK_SIZE:])
+    unpad = lambda s: s[:-ord(s[-1:])]
+    enc = base64.b64decode(enc)
+    iv = enc[:cryptoAES.block_size]
+    cipher = cryptoAES.new(__key__, cryptoAES.MODE_CFB, iv)
+    b=  unpad(base64.b64decode(cipher.decrypt(enc[cryptoAES.block_size:])).decode('utf8'))
+    return b
+
+encrypted_data =encrypt("Hi Steven!!!!!")
+print(encrypted_data)
+print("=======")
+decrypted_data = decrypt(encrypted_data)
+print(decrypted_data)
+
+----
+
+import base64, re
+from Crypto.Cipher import AES
+from Crypto import Random
+from django.conf import settings
+
+import codecs
+
+# Make utf8mb4 recognizable.
+codecs.register(lambda name: codecs.lookup('utf8') if name == 'utf8mb4' else None)
+
+
+class AESCipher:
+
+    def __init__(self, key, blk_sz):
+        self.key = key
+        self.blk_sz = blk_sz
+
+    def encrypt( self, raw ):
+        # raw is the main value
+        if raw is None or len(raw) == 0:
+            raise NameError("No value given to encrypt")
+        raw = raw + '\0' * (self.blk_sz - len(raw) % self.blk_sz)
+        raw = raw.encode('utf8mb4')
+        # Initialization vector to avoid same encrypt for same strings.
+        iv = Random.new().read( AES.block_size )
+        cipher = AES.new( self.key.encode('utf8mb4'), AES.MODE_CFB, iv )
+        return base64.b64encode( iv + cipher.encrypt( raw ) ).decode('utf8mb4')
+
+    def decrypt( self, enc ):
+        # enc is the encrypted value
+        if enc is None or len(enc) == 0:
+            raise NameError("No value given to decrypt")
+        enc = base64.b64decode(enc)
+        iv = enc[:16]
+        # AES.MODE_CFB that allows bigger length or Latin values
+        cipher = AES.new(self.key.encode('utf8mb4'), AES.MODE_CFB, iv )
+        return re.sub(b'\x00*$', b'', cipher.decrypt( enc[16:])).decode('utf8mb4')
+        
+ >>> from django.conf import settings
+>>> from aesencryption import AESCipher
+>>>
+>>> aes = AESCipher(settings.SECRET_KEY[:16], 32)
+>>>
+>>> value = aes.encrypt('漢字')
+>>>
+>>> value
+'hnuRwBjwAHDp5X0DmMF3lWzbjR0r81WlW9MRrWukgQwTL0ZI88oQaWvMfBM+W87w9JtSTw=='
+>>> dec_value = aes.decrypt(value)
+>>> dec_value
+'漢字'
+>>>
